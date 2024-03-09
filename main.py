@@ -1,11 +1,11 @@
-from flask import Flask, render_template, redirect, request, abort
+from flask import Flask, render_template, redirect, request, abort, make_response, jsonify
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 
 from forms.news import NewsForm
 from forms.user import RegisterForm, LoginForm
 from data.news import News
 from data.users import User
-from data import db_session
+from data import db_session, news_api
 
 app = Flask(__name__)
 login_manager = LoginManager()
@@ -28,7 +28,23 @@ def logout():
 
 def main():
     db_session.global_init("db/blogs.db")
+    # О расширенной схеме (добавлен независимый модуль, или Blueprint) должно узнать основное приложение.
+    # Перед запуском нужно зарегистрировать схему
+    app.register_blueprint(news_api.blueprint)
     app.run(debug=True)
+
+
+# https://ru.wikipedia.org/wiki/ Список_кодов_состояния_HTTP
+@app.errorhandler(400)
+def bad_request(_):
+    return make_response(jsonify({'error': 'Bad Request'}), 400)
+
+
+# Если новость с переданным идентификатором не была найдена, то будет отправлен ответ,
+# содержащий json с сообщением об ошибке. Но этого недостаточно, чтобы на принимающей стороне узнали об ошибке.
+@app.errorhandler(404)
+def not_found(_):
+    return make_response(jsonify({'error': 'Not found'}), 404)
 
 
 @app.route('/news', methods=['GET', 'POST'])
@@ -121,6 +137,9 @@ def reqister():
     return render_template('register.html', title='Регистрация', form=form)
 
 
+# Сейчас удалять, добавлять и просматривать новости с помощью нашего API может любой пользователь,
+# а точнее любая программа, которая будет использовать этот API. В настоящих API пользователям разграничивают права.
+# См. видео к уроку "простое REST-API".
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
